@@ -37,20 +37,18 @@ struct Todo {
 // TODO: test 2
 fn main() {
     let args = Args::parse();
-    println!("Hello, world!");
-    println!("Scanning directory: {}", args.path.display());
 
     let todo_locations = scan_for_todos(&args.path).unwrap();
     let mut todos = populate_metadata(&todo_locations).unwrap();
     todos.sort_by_key(|todo| todo.timestamp);
 
-    // Calculate max widths for nice formatting
-    let max_name_length = todos.iter().map(|t| t.author.len()).max().unwrap_or(10);
+    let max_name_length = todos.iter().map(|t| t.author.len()).max().unwrap_or(9) + 1;
     let max_filename_length = todos
         .iter()
         .map(|t| t.filename_with_line_number().len())
         .max()
-        .unwrap_or(20);
+        .unwrap_or(20)
+        .max(15);
     let mut terminal_width = terminal_size().unwrap().0.0 as usize;
     let min_terminal_width = max_name_length + max_filename_length + 30;
     terminal_width = terminal_width.max(min_terminal_width);
@@ -105,6 +103,9 @@ fn populate_metadata(todo_locations: &Vec<TodoLocation>) -> Result<Vec<Todo>, Er
 }
 
 fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
+    let absolute_path = todo_location.path.canonicalize()?;
+    let parent_dir = absolute_path.parent().unwrap();
+
     let output = Command::new("git")
         .arg("blame")
         .arg("-L")
@@ -112,8 +113,8 @@ fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
             "{},{}",
             todo_location.line_number, todo_location.line_number
         ))
-        .arg(todo_location.path.to_str().unwrap())
-        .current_dir(todo_location.path.parent().unwrap()) // Run git from file's directory
+        .arg(absolute_path.to_str().unwrap())
+        .current_dir(parent_dir) // Run git from file's directory
         .output()?;
 
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -219,11 +220,9 @@ impl Todo {
     ) -> String {
         let text_width = terminal_width - max_name_length - max_filename_length - 30;
 
-        // Format with plain text first to get padding right
         let plain_filename = self.filename_with_line_number();
         let padded_filename = format!("{:<max_filename_length$}", plain_filename);
 
-        // Now wrap the filename part with hyperlink (preserving padding)
         let absolute_path = self.path.canonicalize().unwrap_or(self.path.clone());
         let clickable_filename = format!(
             "\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\",
