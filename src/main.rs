@@ -16,7 +16,9 @@ use todo::{Todo, TodoLocation};
 #[command(name = "ye_olde_todos")]
 #[command(about = "Find and manage TODO comments by age")]
 struct Args {
-    #[arg(default_value = ".")]
+    #[arg(short, long)]
+    limit: Option<usize>,
+    #[arg(short, long, default_value = ".")]
     path: PathBuf,
 }
 
@@ -39,7 +41,8 @@ fn main() {
     let min_terminal_width = max_name_length + max_filename_length + 30;
     terminal_width = terminal_width.max(min_terminal_width);
 
-    for todo in &todos {
+    let limit = args.limit.unwrap_or(todos.len());
+    for todo in todos.iter().take(limit) {
         println!(
             "{}",
             todo.to_string(max_name_length, max_filename_length, terminal_width)
