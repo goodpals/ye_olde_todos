@@ -1,20 +1,25 @@
 use crate::todo::{Todo, TodoLocation};
 use chrono::{DateTime, Utc};
+use rayon::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::process::Command;
 
 pub fn populate_metadata(todo_locations: &Vec<TodoLocation>) -> Result<Vec<Todo>, Error> {
-    let mut todos = Vec::new();
-    for todo_location in todo_locations {
-        match get_git_blame(todo_location) {
-            Ok(todo) => todos.push(todo),
-            Err(e) => eprintln!(
-                "Warning: couldn't get git blame for {}: {}",
-                todo_location.path.display(),
-                e
-            ),
-        }
-    }
+    let todos: Vec<_> = todo_locations
+        .par_iter()
+        .filter_map(|todo_location| match get_git_blame(todo_location) {
+            Ok(todo) => Some(todo),
+            Err(e) => {
+                eprintln!(
+                    "Warning: couldn't get git blame for {}: {}",
+                    todo_location.path.display(),
+                    e
+                );
+                None
+            }
+        })
+        .collect();
+
     Ok(todos)
 }
 

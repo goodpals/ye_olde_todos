@@ -1,5 +1,6 @@
 use clap::Parser;
 use ignore::Walk;
+use rayon::prelude::*;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
@@ -51,19 +52,17 @@ fn main() {
 }
 
 fn scan_for_todos(root: &PathBuf) -> Result<Vec<TodoLocation>, Error> {
-    let mut todos = Vec::new();
-    for entry in Walk::new(root) {
-        match entry {
-            Ok(entry) => {
-                if entry.path().is_file() {
-                    todos.extend(scan_file(entry.path()).unwrap());
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-            }
-        }
-    }
+    let files: Vec<_> = Walk::new(root)
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .collect();
+
+    let todos: Vec<_> = files
+        .par_iter()
+        .filter_map(|entry| scan_file(entry.path()).ok())
+        .flatten()
+        .collect();
+
     Ok(todos)
 }
 
