@@ -72,7 +72,7 @@ fn scan_file(path: &Path) -> Result<Vec<TodoLocation>, Error> {
     let reader = BufReader::new(file);
     let mut todos = Vec::new();
     for (line_number, line) in reader.lines().filter_map(Result::ok).enumerate() {
-        if line.contains("// TODO:") || line.contains("# TODO:") {
+        if line.contains("// TODO") || line.contains("# TODO") {
             todos.push(TodoLocation {
                 path: path.to_path_buf(),
                 line_number: line_number + 1,
