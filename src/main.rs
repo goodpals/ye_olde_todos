@@ -1,14 +1,16 @@
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use ignore::Walk;
-use owo_colors::OwoColorize;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Error},
+    io::{BufRead, BufReader, Error, ErrorKind},
     path::{Path, PathBuf},
     process::Command,
 };
 use terminal_size::terminal_size;
+
+mod todo;
+use todo::{Todo, TodoLocation};
 
 #[derive(Parser)]
 #[command(name = "ye_olde_todos")]
@@ -16,22 +18,6 @@ use terminal_size::terminal_size;
 struct Args {
     #[arg(default_value = ".")]
     path: PathBuf,
-}
-
-#[derive(Clone)]
-struct TodoLocation {
-    path: PathBuf,
-    line_number: usize,
-    text: String,
-}
-
-// TODO: test 1
-struct Todo {
-    path: PathBuf,
-    line_number: usize,
-    text: String,
-    timestamp: DateTime<Utc>,
-    author: String,
 }
 
 // TODO: test 2
@@ -83,7 +69,7 @@ fn scan_file(path: &Path) -> Result<Vec<TodoLocation>, Error> {
     let reader = BufReader::new(file);
     let mut todos = Vec::new();
     for (line_number, line) in reader.lines().filter_map(Result::ok).enumerate() {
-        if line.contains("// TODO:") {
+        if line.contains("// TODO:") || line.contains("# TODO:") {
             todos.push(TodoLocation {
                 path: path.to_path_buf(),
                 line_number: line_number + 1,
@@ -97,7 +83,14 @@ fn scan_file(path: &Path) -> Result<Vec<TodoLocation>, Error> {
 fn populate_metadata(todo_locations: &Vec<TodoLocation>) -> Result<Vec<Todo>, Error> {
     let mut todos = Vec::new();
     for todo_location in todo_locations {
-        todos.push(get_git_blame(todo_location)?);
+        match get_git_blame(todo_location) {
+            Ok(todo) => todos.push(todo),
+            Err(e) => eprintln!(
+                "Warning: couldn't get git blame for {}: {}",
+                todo_location.path.display(),
+                e
+            ),
+        }
     }
     Ok(todos)
 }
@@ -117,8 +110,20 @@ fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
         .current_dir(parent_dir) // Run git from file's directory
         .output()?;
 
+    // Check if git command succeeded
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!("git blame failed: {}", stderr),
+        ));
+    }
+
     let stdout = String::from_utf8(output.stdout).unwrap();
-    let line = stdout.lines().next().unwrap();
+    let line = match stdout.lines().next() {
+        Some(l) => l,
+        None => return Err(Error::new(ErrorKind::Other, "git blame returned no output")),
+    };
 
     // Parse format: "hash (Author Name YYYY-MM-DD HH:MM:SS +ZZZZ linenum) code..."
     let start = line.find('(').unwrap() + 1;
@@ -157,85 +162,4 @@ fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
         timestamp,
         author: author.to_string(),
     })
-}
-
-impl Todo {
-    fn filename(&self) -> String {
-        self.path
-            .display()
-            .to_string()
-            .split("/")
-            .last()
-            .unwrap()
-            .to_string()
-    }
-
-    fn filename_with_line_number(&self) -> String {
-        format!("{}:{}", self.filename(), self.line_number)
-    }
-
-    fn age_string(&self) -> String {
-        let now = Utc::now();
-        let duration = now.signed_duration_since(self.timestamp);
-        let days = duration.num_days();
-        if days > 0 {
-            if days > 364 {
-                return format!("{:10}", format!("{} days", days)).red().to_string();
-            }
-            if days > 60 {
-                return format!("{:10}", format!("{} days", days))
-                    .yellow()
-                    .to_string();
-            }
-            return format!("{:10}", format!("{} days", days))
-                .green()
-                .to_string();
-        }
-        let hours = duration.num_hours();
-        if hours > 0 {
-            return format!("{} hours", hours);
-        }
-        let minutes = duration.num_minutes();
-        if minutes > 0 {
-            return format!("{} minutes", minutes);
-        }
-        return format!("{} seconds", duration.num_seconds());
-    }
-
-    fn truncate_text(&self, max_width: usize) -> String {
-        if self.text.len() <= max_width {
-            self.text.clone()
-        } else if max_width <= 3 {
-            "...".to_string()
-        } else {
-            format!("{}...", &self.text[..max_width - 3])
-        }
-    }
-
-    fn to_string(
-        &self,
-        max_name_length: usize,
-        max_filename_length: usize,
-        terminal_width: usize,
-    ) -> String {
-        let text_width = terminal_width - max_name_length - max_filename_length - 30;
-
-        let plain_filename = self.filename_with_line_number();
-        let padded_filename = format!("{:<max_filename_length$}", plain_filename);
-
-        let absolute_path = self.path.canonicalize().unwrap_or(self.path.clone());
-        let clickable_filename = format!(
-            "\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\",
-            absolute_path.display(),
-            padded_filename.blue().to_string()
-        );
-
-        format!(
-            "{:10} {:max_name_length$} {} {:<text_width$}",
-            self.age_string(),
-            self.author.to_string(),
-            clickable_filename,
-            self.truncate_text(text_width).italic().to_string()
-        )
-    }
 }
