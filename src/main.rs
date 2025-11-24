@@ -27,6 +27,7 @@ struct Todo {
     timestamp: DateTime<Utc>,
 }
 
+// TODO: test 2
 fn main() {
     let args = Args::parse();
     println!("Hello, world!");
