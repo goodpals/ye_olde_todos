@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use ignore::Walk;
+use owo_colors::OwoColorize;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
@@ -50,8 +51,9 @@ fn main() {
         .map(|t| t.filename_with_line_number().len())
         .max()
         .unwrap_or(20);
-    let terminal_width = terminal_size().unwrap().0.0 as usize;
-    println!("Terminal width: {}", terminal_width);
+    let mut terminal_width = terminal_size().unwrap().0.0 as usize;
+    let min_terminal_width = max_name_length + max_filename_length + 30;
+    terminal_width = terminal_width.max(min_terminal_width);
 
     for todo in &todos {
         println!(
@@ -176,7 +178,17 @@ impl Todo {
         let duration = now.signed_duration_since(self.timestamp);
         let days = duration.num_days();
         if days > 0 {
-            return format!("{} days", days);
+            if days > 364 {
+                return format!("{:10}", format!("{} days", days)).red().to_string();
+            }
+            if days > 60 {
+                return format!("{:10}", format!("{} days", days))
+                    .yellow()
+                    .to_string();
+            }
+            return format!("{:10}", format!("{} days", days))
+                .green()
+                .to_string();
         }
         let hours = duration.num_hours();
         if hours > 0 {
@@ -206,12 +218,25 @@ impl Todo {
         terminal_width: usize,
     ) -> String {
         let text_width = terminal_width - max_name_length - max_filename_length - 30;
+
+        // Format with plain text first to get padding right
+        let plain_filename = self.filename_with_line_number();
+        let padded_filename = format!("{:<max_filename_length$}", plain_filename);
+
+        // Now wrap the filename part with hyperlink (preserving padding)
+        let absolute_path = self.path.canonicalize().unwrap_or(self.path.clone());
+        let clickable_filename = format!(
+            "\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\",
+            absolute_path.display(),
+            padded_filename.blue().to_string()
+        );
+
         format!(
-            "{:10} {:max_name_length$} {:<max_filename_length$} {:<text_width$}",
+            "{:10} {:max_name_length$} {} {:<text_width$}",
             self.age_string(),
             self.author.to_string(),
-            self.filename_with_line_number(),
-            self.truncate_text(text_width),
+            clickable_filename,
+            self.truncate_text(text_width).italic().to_string()
         )
     }
 }

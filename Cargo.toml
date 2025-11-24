@@ -7,4 +7,5 @@ edition = "2024"
 chrono = "0.4.42"
 clap = { version = "4.5.53", features = ["derive"] }
 ignore = "0.4.25"
+owo-colors = "4.2.3"
 terminal_size = "0.4.3"
