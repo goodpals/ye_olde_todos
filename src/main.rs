@@ -5,7 +5,9 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
     path::{Path, PathBuf},
+    process::Command,
 };
+use terminal_size::terminal_size;
 
 #[derive(Parser)]
 #[command(name = "ye_olde_todos")]
@@ -15,6 +17,7 @@ struct Args {
     path: PathBuf,
 }
 
+#[derive(Clone)]
 struct TodoLocation {
     path: PathBuf,
     line_number: usize,
@@ -23,8 +26,11 @@ struct TodoLocation {
 
 // TODO: test 1
 struct Todo {
-    location: TodoLocation,
+    path: PathBuf,
+    line_number: usize,
+    text: String,
     timestamp: DateTime<Utc>,
+    author: String,
 }
 
 // TODO: test 2
@@ -34,8 +40,24 @@ fn main() {
     println!("Scanning directory: {}", args.path.display());
 
     let todo_locations = scan_for_todos(&args.path).unwrap();
-    for todo_location in todo_locations {
-        println!("TODO: {}", todo_location.text);
+    let mut todos = populate_metadata(&todo_locations).unwrap();
+    todos.sort_by_key(|todo| todo.timestamp);
+
+    // Calculate max widths for nice formatting
+    let max_name_length = todos.iter().map(|t| t.author.len()).max().unwrap_or(10);
+    let max_filename_length = todos
+        .iter()
+        .map(|t| t.filename_with_line_number().len())
+        .max()
+        .unwrap_or(20);
+    let terminal_width = terminal_size().unwrap().0.0 as usize;
+    println!("Terminal width: {}", terminal_width);
+
+    for todo in &todos {
+        println!(
+            "{}",
+            todo.to_string(max_name_length, max_filename_length, terminal_width)
+        );
     }
 }
 
@@ -72,11 +94,124 @@ fn scan_file(path: &Path) -> Result<Vec<TodoLocation>, Error> {
     Ok(todos)
 }
 
-impl TodoLocation {
-    fn with_timestamp(self, timestamp: DateTime<Utc>) -> Todo {
-        Todo {
-            location: self,
-            timestamp,
+fn populate_metadata(todo_locations: &Vec<TodoLocation>) -> Result<Vec<Todo>, Error> {
+    let mut todos = Vec::new();
+    for todo_location in todo_locations {
+        todos.push(get_git_blame(todo_location)?);
+    }
+    Ok(todos)
+}
+
+fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
+    let output = Command::new("git")
+        .arg("blame")
+        .arg("-L")
+        .arg(format!(
+            "{},{}",
+            todo_location.line_number, todo_location.line_number
+        ))
+        .arg(todo_location.path.to_str().unwrap())
+        .current_dir(todo_location.path.parent().unwrap()) // Run git from file's directory
+        .output()?;
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let line = stdout.lines().next().unwrap();
+
+    // Parse format: "hash (Author Name YYYY-MM-DD HH:MM:SS +ZZZZ linenum) code..."
+    let start = line.find('(').unwrap() + 1;
+    let end = line.find(')').unwrap();
+    let info = &line[start..end];
+
+    // Split off the line number from the end
+    let parts: Vec<&str> = info.rsplitn(2, ' ').collect();
+    let datetime_author = parts[1]; // "Author Name YYYY-MM-DD HH:MM:SS +ZZZZ"
+
+    // Split off timezone from the end
+    let parts: Vec<&str> = datetime_author.rsplitn(2, ' ').collect();
+    let tz = parts[0]; // "+0700"
+    let before_tz = parts[1]; // "Author Name YYYY-MM-DD HH:MM:SS"
+
+    // Split off time
+    let parts: Vec<&str> = before_tz.rsplitn(2, ' ').collect();
+    let time = parts[0]; // "13:03:08"
+    let before_time = parts[1]; // "Author Name YYYY-MM-DD"
+
+    // Split off date
+    let parts: Vec<&str> = before_time.rsplitn(2, ' ').collect();
+    let date = parts[0]; // "2025-11-24"
+    let author = parts[1]; // "Author Name"
+
+    // Parse datetime: "2025-11-24 13:03:08 +0700"
+    let datetime_str = format!("{} {} {}", date, time, tz);
+    let timestamp = DateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S %z")
+        .unwrap()
+        .with_timezone(&Utc);
+
+    Ok(Todo {
+        path: todo_location.path.clone(),
+        line_number: todo_location.line_number,
+        text: todo_location.text.clone(),
+        timestamp,
+        author: author.to_string(),
+    })
+}
+
+impl Todo {
+    fn filename(&self) -> String {
+        self.path
+            .display()
+            .to_string()
+            .split("/")
+            .last()
+            .unwrap()
+            .to_string()
+    }
+
+    fn filename_with_line_number(&self) -> String {
+        format!("{}:{}", self.filename(), self.line_number)
+    }
+
+    fn age_string(&self) -> String {
+        let now = Utc::now();
+        let duration = now.signed_duration_since(self.timestamp);
+        let days = duration.num_days();
+        if days > 0 {
+            return format!("{} days", days);
         }
+        let hours = duration.num_hours();
+        if hours > 0 {
+            return format!("{} hours", hours);
+        }
+        let minutes = duration.num_minutes();
+        if minutes > 0 {
+            return format!("{} minutes", minutes);
+        }
+        return format!("{} seconds", duration.num_seconds());
+    }
+
+    fn truncate_text(&self, max_width: usize) -> String {
+        if self.text.len() <= max_width {
+            self.text.clone()
+        } else if max_width <= 3 {
+            "...".to_string()
+        } else {
+            format!("{}...", &self.text[..max_width - 3])
+        }
+    }
+
+    fn to_string(
+        &self,
+        max_name_length: usize,
+        max_filename_length: usize,
+        terminal_width: usize,
+    ) -> String {
+        let text_width = terminal_width - max_name_length - max_filename_length - 30;
+        format!(
+            "{:10} {:max_name_length$} {:<max_filename_length$} {:<text_width$}",
+            self.age_string(),
+            self.author.to_string(),
+            self.filename_with_line_number(),
+            self.truncate_text(text_width),
+        )
     }
 }
