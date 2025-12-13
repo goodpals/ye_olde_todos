@@ -82,11 +82,15 @@ pub fn get_git_blame(todo_location: &TodoLocation) -> Result<Todo, Error> {
         .unwrap()
         .with_timezone(&Utc);
 
+    let now = Utc::now();
+    let age = now.signed_duration_since(timestamp);
+
     Ok(Todo {
         path: todo_location.path.clone(),
         line_number: todo_location.line_number,
         text: todo_location.text.clone(),
-        timestamp,
         author: author.to_string(),
+        timestamp,
+        age,
     })
 }

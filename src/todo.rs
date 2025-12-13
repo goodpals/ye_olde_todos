@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use owo_colors::OwoColorize;
 use std::path::PathBuf;
 
@@ -9,13 +9,13 @@ pub struct TodoLocation {
     pub text: String,
 }
 
-// TODO: test 1
 pub struct Todo {
     pub path: PathBuf,
     pub line_number: usize,
     pub text: String,
-    pub timestamp: DateTime<Utc>,
     pub author: String,
+    pub timestamp: DateTime<Utc>,
+    pub age: Duration,
 }
 
 impl Todo {
@@ -34,9 +34,7 @@ impl Todo {
     }
 
     fn age_string(&self) -> String {
-        let now = Utc::now();
-        let duration = now.signed_duration_since(self.timestamp);
-        let days = duration.num_days();
+        let days = self.age.num_days();
         if days > 0 {
             if days > 364 {
                 return format!("{:10}", format!("{} days", days)).red().to_string();
@@ -50,15 +48,15 @@ impl Todo {
                 .green()
                 .to_string();
         }
-        let hours = duration.num_hours();
+        let hours = self.age.num_hours();
         if hours > 0 {
             return format!("{} hours", hours);
         }
-        let minutes = duration.num_minutes();
+        let minutes = self.age.num_minutes();
         if minutes > 0 {
             return format!("{} minutes", minutes);
         }
-        return format!("{} seconds", duration.num_seconds());
+        return format!("{} seconds", self.age.num_seconds());
     }
 
     fn truncate_text(&self, max_width: usize) -> String {

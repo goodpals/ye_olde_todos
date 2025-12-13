@@ -9,8 +9,10 @@ use std::{
 use terminal_size::terminal_size;
 
 mod git;
+mod stats;
 mod todo;
 use git::populate_metadata;
+use stats::{calculate_stats, format_stats};
 use todo::TodoLocation;
 
 #[derive(Parser)]
@@ -21,9 +23,10 @@ struct Args {
     limit: Option<usize>,
     #[arg(short, long, default_value = ".")]
     path: PathBuf,
+    #[arg(long = "no-stats", action = clap::ArgAction::SetTrue)]
+    no_stats: bool,
 }
 
-// TODO: test 2
 fn main() {
     let args = Args::parse();
 
@@ -43,7 +46,17 @@ fn main() {
     terminal_width = terminal_width.max(min_terminal_width);
 
     let limit = args.limit.unwrap_or(todos.len());
-    for todo in todos.iter().take(limit) {
+    let displayed_count = limit.min(todos.len());
+    let total_count = todos.len();
+
+    let filtered_todos = &todos[..displayed_count];
+
+    if !args.no_stats {
+        let stats = calculate_stats(filtered_todos);
+        println!("{}", format_stats(&stats, displayed_count, total_count));
+    }
+
+    for todo in filtered_todos {
         println!(
             "{}",
             todo.to_string(max_name_length, max_filename_length, terminal_width)
