@@ -1,6 +1,7 @@
 use clap::Parser;
 use ignore::Walk;
 use rayon::prelude::*;
+use serde_json;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
@@ -12,8 +13,8 @@ mod git;
 mod stats;
 mod todo;
 use git::populate_metadata;
-use stats::{calculate_stats, format_stats};
-use todo::TodoLocation;
+use stats::{TodoStats, calculate_stats, format_stats};
+use todo::{Todo, TodoLocation};
 
 #[derive(Parser)]
 #[command(name = "ye_olde_todos")]
@@ -25,6 +26,8 @@ struct Args {
     path: PathBuf,
     #[arg(long = "no-stats", action = clap::ArgAction::SetTrue)]
     no_stats: bool,
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    json: bool,
 }
 
 fn main() {
@@ -46,21 +49,33 @@ fn main() {
     terminal_width = terminal_width.max(min_terminal_width);
 
     let limit = args.limit.unwrap_or(todos.len());
-    let displayed_count = limit.min(todos.len());
+    let filtered_count = limit.min(todos.len());
     let total_count = todos.len();
 
-    let filtered_todos = &todos[..displayed_count];
+    let filtered_todos = &todos[..filtered_count];
 
-    if !args.no_stats {
-        let stats = calculate_stats(filtered_todos);
-        println!("{}", format_stats(&stats, displayed_count, total_count));
-    }
+    let stats = if !args.no_stats {
+        Some(calculate_stats(filtered_todos))
+    } else {
+        None
+    };
 
-    for todo in filtered_todos {
-        println!(
-            "{}",
-            todo.to_string(max_name_length, max_filename_length, terminal_width)
-        );
+    if args.json {
+        output_json(filtered_todos, stats, filtered_count, total_count);
+    } else {
+        if stats.is_some() {
+            println!(
+                "{}",
+                format_stats(&stats.unwrap(), filtered_count, total_count)
+            );
+        }
+
+        for todo in filtered_todos {
+            println!(
+                "{}",
+                todo.to_string(max_name_length, max_filename_length, terminal_width)
+            );
+        }
     }
 }
 
@@ -93,4 +108,19 @@ fn scan_file(path: &Path) -> Result<Vec<TodoLocation>, Error> {
         }
     }
     Ok(todos)
+}
+
+fn output_json(
+    filtered_todos: &[Todo],
+    stats: Option<TodoStats>,
+    filtered_count: usize,
+    total_count: usize,
+) {
+    let output = serde_json::json!({
+        "stats": stats,
+        "todos": filtered_todos,
+        "filtered_count": filtered_count,
+        "total_count": total_count,
+    });
+    println!("{}", serde_json::to_string_pretty(&output).unwrap());
 }

@@ -1,6 +1,8 @@
 use crate::todo::Todo;
 use owo_colors::OwoColorize;
+use serde::Serialize;
 
+#[derive(Serialize)]
 pub struct TodoStats {
     pub mean_age_days: f64,
     pub median_age_days: i64,
@@ -38,8 +40,8 @@ fn format_value(value: &str) -> String {
     format!("{}", value).green().bold().to_string()
 }
 
-pub fn format_stats(stats: &TodoStats, displayed_count: usize, total_count: usize) -> String {
-    let count_value = format_value(&format!("{}/{}", displayed_count, total_count));
+pub fn format_stats(stats: &TodoStats, filtered_count: usize, total_count: usize) -> String {
+    let count_value = format_value(&format!("{}/{}", filtered_count, total_count));
     let count_text = format!("Todos: {}", count_value);
 
     let mean_value = format_value(&format!("{:.1} days", stats.mean_age_days));

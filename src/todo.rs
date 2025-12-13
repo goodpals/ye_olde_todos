@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use owo_colors::OwoColorize;
+use serde::Serialize;
 use std::path::PathBuf;
 
 #[derive(Clone)]
@@ -9,13 +10,30 @@ pub struct TodoLocation {
     pub text: String,
 }
 
+#[derive(Serialize)]
 pub struct Todo {
     pub path: PathBuf,
     pub line_number: usize,
     pub text: String,
     pub author: String,
+    #[serde(serialize_with = "serialize_datetime")]
     pub timestamp: DateTime<Utc>,
+    #[serde(serialize_with = "serialize_duration")]
     pub age: Duration,
+}
+
+fn serialize_datetime<S>(dt: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&dt.to_rfc3339())
+}
+
+fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_i64(duration.num_milliseconds())
 }
 
 impl Todo {
