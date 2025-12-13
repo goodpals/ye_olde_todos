@@ -28,6 +28,8 @@ struct Args {
     no_stats: bool,
     #[arg(long, action = clap::ArgAction::SetTrue)]
     json: bool,
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    reverse: bool,
 }
 
 fn main() {
@@ -36,6 +38,9 @@ fn main() {
     let todo_locations = scan_for_todos(&args.path).unwrap();
     let mut todos = populate_metadata(&todo_locations).unwrap();
     todos.sort_by_key(|todo| todo.timestamp);
+    if args.reverse {
+        todos.reverse();
+    }
 
     let max_name_length = todos.iter().map(|t| t.author.len()).max().unwrap_or(9) + 1;
     let max_filename_length = todos
