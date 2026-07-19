@@ -32,6 +32,8 @@ struct Args {
     json: bool,
     #[arg(short, long, action = clap::ArgAction::SetTrue)]
     reverse: bool,
+    #[arg(short, long)]
+    width: Option<usize>,
 }
 
 fn main() {
@@ -51,7 +53,8 @@ fn main() {
         .max()
         .unwrap_or(20)
         .max(15);
-    let mut terminal_width = get_terminal_width();
+
+    let mut terminal_width = args.width.unwrap_or(get_terminal_width());
     let min_terminal_width = max_name_length + max_filename_length + 30;
     terminal_width = terminal_width.max(min_terminal_width);
 

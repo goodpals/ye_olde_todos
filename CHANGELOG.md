@@ -1,3 +1,7 @@
+## 1.2.0
+- Fixed path parsing on Windows.
+- Added `--width` arg to set the output width (useful in non-interactive terminals).
+
 ## 1.1.0
 - Stats line before output (mean/median age).
 - Added `--json` output option.
