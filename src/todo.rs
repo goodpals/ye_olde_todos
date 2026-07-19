@@ -39,11 +39,9 @@ where
 impl Todo {
     fn filename(&self) -> String {
         self.path
-            .display()
-            .to_string()
-            .split("/")
-            .last()
-            .unwrap()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
             .to_string()
     }
 
@@ -114,3 +112,4 @@ impl Todo {
         )
     }
 }
+
