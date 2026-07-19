@@ -7,13 +7,15 @@ use std::{
     io::{BufRead, BufReader, Error},
     path::{Path, PathBuf},
 };
-use terminal_size::terminal_size;
 
 mod git;
 mod stats;
+mod terminal;
 mod todo;
+
 use git::populate_metadata;
 use stats::{TodoStats, calculate_stats, format_stats};
+use terminal::get_terminal_width;
 use todo::{Todo, TodoLocation};
 
 #[derive(Parser)]
@@ -49,7 +51,7 @@ fn main() {
         .max()
         .unwrap_or(20)
         .max(15);
-    let mut terminal_width = terminal_size().unwrap().0.0 as usize;
+    let mut terminal_width = get_terminal_width();
     let min_terminal_width = max_name_length + max_filename_length + 30;
     terminal_width = terminal_width.max(min_terminal_width);
 
