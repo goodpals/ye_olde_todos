@@ -12,3 +12,7 @@ rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 terminal_size = "0.4.3"
+
+[[bin]]
+name = "yot"
+path = "src/main.rs"

@@ -1,4 +1,5 @@
 ## 1.2.0
+- Renamed executable to `yot`, for brevity.
 - Fixed path parsing on Windows.
 - Added `--width` arg to set the output width (useful in non-interactive terminals).
 

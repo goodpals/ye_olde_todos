@@ -19,8 +19,8 @@ use terminal::get_terminal_width;
 use todo::{Todo, TodoLocation};
 
 #[derive(Parser)]
-#[command(name = "ye_olde_todos")]
-#[command(about = "Find and manage TODO comments by age")]
+#[command(name = "yot")]
+#[command(about = "Ye Olde Todos: find and manage TODO comments by age")]
 struct Args {
     #[arg(short, long)]
     limit: Option<usize>,
