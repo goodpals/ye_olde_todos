@@ -1,3 +1,6 @@
+## 1.3.0
+- Rewrote git blame parsing to be more efficient and robust, using `--porcelain` and batching TODOs by file.
+
 ## 1.2.0
 - Renamed executable to `yot`, for brevity.
 - Fixed path parsing on Windows.
